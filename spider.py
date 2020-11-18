@@ -6,6 +6,7 @@ import lxml.html as lh
 import locale
 import fake_useragent
 import concurrent.futures
+import datetime as dt
 
 
 
@@ -15,15 +16,9 @@ locale.setlocale(locale.LC_NUMERIC, '')
 pd.set_option('display.max_rows', 200)
 pd.set_option('display.max_columns', 200)
 
-
-
 headers = {
         'User-Agent': fake_useragent.UserAgent().chrome,
 }
-
-
-
-
 
 def get_brand_and_model():
     url = f'https://www.olx.com.br/autos-e-pecas/carros-vans-e-utilitarios'
@@ -58,32 +53,44 @@ def get_brand_and_model():
     return { brand : get_model(brand)[1:] for i, brand in enumerate(brands) if i > 0}
 
 
+def search_links(marca=None, modelo=None, estado=None):
 
-def get_search_links(marca=None, modelo=None, estado=None):
 
     url_estado = estado
+    url_marca = marca
     if marca:
         url_marca = f'{marca}/'
     if estado:
         url_estado = f'{estado}.'
-    url = f"https://{url_estado}olx.com.br/autos-e-pecas/carros-vans-e-utilitarios/{url_marca}{modelo}?o=1"
-    page = requests.get(url, headers=headers)
+        estados = [estado]
 
-    doc = lh.fromstring(page.content)
 
-    # Parse data that are stored between <select>..</select> of HTML
-    select_qtd = doc.xpath('//*[@id="column-main-content"]/div[8]/div/span')
-    qtd_items = int(select_qtd[0].text.replace(' - ', '-').replace('.', '').split(' ')[2])
-    if qtd_items > 50:
-        paginas = int(qtd_items / 50) + 1
-    elif qtd_items == 0:
-        paginas = 0
-    else:
-        paginas = 1
-    print(f"TOTAL PAGES: {paginas}")
-    links = []
-    lista = [i for i in range(1, paginas + 1)]
-    print(lista)
+    def scrap(state):
+        url = f"https://{state}olx.com.br/autos-e-pecas/carros-vans-e-utilitarios/{url_marca}{modelo}?o=1"
+        page = requests.get(url, headers=headers)
+
+        doc = lh.fromstring(page.content)
+
+        # Parse data that are stored between <select>..</select> of HTML
+        select_qtd = doc.xpath('//*[@id="column-main-content"]/div[8]/div/span')
+        qtd_items = int(select_qtd[0].text.replace(' - ', '-').replace('.', '').split(' ')[2])
+        if qtd_items > 50:
+            paginas = int(qtd_items / 50) + 1
+        elif qtd_items == 0:
+            paginas = 0
+        else:
+            paginas = 1
+        print(f"\nESTADO: {state[:2].upper()} | TOTAL PAGES: {paginas}  | TOTAL LINKS: {qtd_items}")
+        lista = (i for i in range(1, paginas + 1))
+
+
+        if paginas > 0:
+
+            with concurrent.futures.ThreadPoolExecutor() as executor:
+                executor.map(scrap_links, lista)
+
+        else:
+            print('Não há resultados')
 
     def scrap_links(page_index):
 
@@ -93,32 +100,23 @@ def get_search_links(marca=None, modelo=None, estado=None):
         doc = lh.fromstring(page.content)
 
         select_elements = doc.xpath('//li/a/@href')
+        with open('links.csv', 'a') as f:
+            for i in select_elements[3:]:
+                f.write(f"{i}\n")
 
-        for i in select_elements[3:]:
-            links.append(i)
+        print(f"{dt.datetime.now()} | PAGE: {page_index} | ADDED: {len(select_elements[3:])} links ")
 
-        print(f"[PAGE - {page_index}] ADDED: {len(select_elements[3:])} links | TOTAL LINKS: {len(links)}")
-
-
-
-
-    if paginas > 0:
-        with concurrent.futures.ThreadPoolExecutor() as executor:
-            executor.map(scrap_links, lista)
-
-    else:
-        print('Não há resultados')
-
-    return links
+    for state in estados:
+        url_state = f'{state}.'
+        scrap(url_state)
 
 
-
-
-def search_ads(marca=None, modelo=None, estado=None):
+def search_ads():
 
     ad_list = []
 
-    links = get_search_links(marca=marca, estado=estado, modelo=modelo)
+    links = pd.read_csv('links.csv')
+    links = (i for i in list(links['links']))
 
     df2 = pd.read_csv("modelos.csv")
     df2['id'] = df2['id'].apply(lambda x: x.lower())
@@ -176,7 +174,7 @@ def search_ads(marca=None, modelo=None, estado=None):
                 ad['steering'] = item.get_text().replace('Direção', '')
 
             elif 'Cor' in item.get_text():
-                ad['color'] = item.get_text().replace('Cor', '')
+                ad['color'] = item.get_text().replace('Cor', '').lower()
 
             elif 'Portas' in item.get_text():
                 ad['doors'] = item.get_text().replace('Portas', '')
@@ -219,12 +217,26 @@ def search_ads(marca=None, modelo=None, estado=None):
         with open("consulta_olx.csv", 'a', encoding='utf-8') as arq:
             arq.write(f"{ad['model']};{ad['brand']};{ad['color']};{ad['transmission']};{ad['year']};{ad['km']};{ad['preco']};{ad['link']};{ad['postal_code']};{ad['description']};{ad['brand_id']};{ad['model_id']}\n")
         ad_list.append(ad)
-        print(f'[SCRAP TOTAL]: {len(ad_list)}')
+        print(f"[{dt.datetime.now()}] ITEM: {len(ad_list)}  | MARCA: {ad['brand']} | MODELO:{ad['model']} | ANO: {ad['year']} | PREÇO: {ad['preco']} | KM: {ad['km']}")
 
 
     with concurrent.futures.ThreadPoolExecutor() as executor:
         executor.map(scrap_ad, links)
 
+def get_links(brand, model, state):
+
+    estados = ['ac', 'al', 'ap', 'am', 'ba', 'ce', 'df', 'es', 'go', 'ma', 'mt',
+               'ms', 'mg', 'pa', 'pb', 'pr', 'pe', 'pi', 'rj', 'rn', 'rs',
+               'ro', 'rr', 'sc', 'sp', 'se', 'to']
+
+    with open('links.csv', 'w') as f:
+        f.write("links\n")
+
+    if state:
+        search_links(brand, model, state)
+    else:
+        for uf in estados:
+            search_links(brand, model, uf)
 
 
 
