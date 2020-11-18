@@ -6,6 +6,10 @@ from time import sleep
 import numpy as np
 import os
 from urllib.error import HTTPError
+import locale
+import datetime as dt
+
+locale.setlocale(locale.LC_NUMERIC, '')
 
 # SITE_API = "http://fipeapi.appspot.com/"
 
@@ -61,11 +65,13 @@ def get_fipe_price(marca, modelo, ano):
 
 
     year = pd.read_json(url_md)
-    year['ano'] = year['key'].apply(lambda x: x[0:4])
+    year['ano'] = year['key'].apply(lambda x: int(x[0:4]))
+
 
 
     filt = year['ano'] == ano
     year = year.loc[filt]
+
 
     if year.empty:
 
@@ -105,6 +111,7 @@ def get_models_price():
 
     df = pd.read_csv("consulta_olx.csv", encoding='latin-1', sep=';')
     df.dropna(inplace=True)
+    df['year'] = df['year'].apply(lambda x: int(x))
     df['brand_id'] = df['brand_id'].apply(lambda x: int(x))
     df['model_id'] = df['model_id'].apply(lambda x: int(x))
     df = df.groupby(['brand_id', 'model_id', 'year']).count()
@@ -121,22 +128,22 @@ def get_models_price():
             item = get_fipe_price(i[0], i[1], i[2])
             with open('consulta_fipe.csv', 'a', encoding='utf-8') as arq:
                 arq.write(f"{i[0]};{i[1]};{i[2]};{item}\n")
-            print(f"[ADD ITEM] - Brand ID: {i[0]} | Model ID: {i[1]} | Year: {i[2]} | Price: {item}")
+            print(f"[ADD ITEM] - Brand ID: {i[0]} | Model ID: {i[1]} | Year: {i[2]} | Price: {item}  | TimeStamp: {dt.datetime.now()}")
 
         except HTTPError:
             print(f"[FAIL TO ADD] - Brand ID: {i[0]} | Model ID: {i[1]} | Year: {i[2]}")
-            print("Will retry in 60 seconds - First Attempt")
+            print(f"Will retry in 60 seconds - First Attempt  | TimeStamp: {dt.datetime.now()}")
             try:
                 sleep(60)
                 item = get_fipe_price(i[0], i[1], i[2])
                 with open('consulta_fipe.csv', 'a', encoding='utf-8') as arq:
                     arq.write(f"{i[0]};{i[1]};{i[2]};{item}\n")
-                print(f"[ADD ITEM] - Brand ID: {i[0]} | Model ID: {i[1]} | Year: {i[2]} | Price: {item}")
+                print(f"[ADD ITEM] - Brand ID: {i[0]} | Model ID: {i[1]} | Year: {i[2]} | Price: {item}  | TimeStamp: {dt.datetime.now()}")
 
 
             except HTTPError:
 
-                print(f"[FAIL TO ADD] - Brand ID: {i[0]} | Model ID: {i[1]} | Year: {i[2]}")
+                print(f"[FAIL TO ADD] - Brand ID: {i[0]} | Model ID: {i[1]} | Year: {i[2]}  | TimeStamp: {dt.datetime.now()}")
 
                 print("Will retry in 30 seconds - Second Attempt")
 
@@ -149,10 +156,10 @@ def get_models_price():
                     with open('consulta_fipe.csv', 'a', encoding='utf-8') as arq:
                         arq.write(f"{i[0]};{i[1]};{i[2]};{item}\n")
 
-                    print(f"[ADD ITEM] - Brand ID: {i[0]} | Model ID: {i[1]} | Year: {i[2]} | Price: {item}")
+                    print(f"[ADD ITEM] - Brand ID: {i[0]} | Model ID: {i[1]} | Year: {i[2]} | Price: {item}  | TimeStamp: {dt.datetime.now()}")
 
                 except HTTPError:
-                    print(f"[FAIL TO ADD] - Brand ID: {i[0]} | Model ID: {i[1]} | Year: {i[2]}")
+                    print(f"[FAIL TO ADD] - Brand ID: {i[0]} | Model ID: {i[1]} | Year: {i[2]}  | TimeStamp: {dt.datetime.now()}")
                     print("Will retry in 30 seconds - Third Attempt")
                     try:
                         sleep(30)
@@ -160,18 +167,18 @@ def get_models_price():
 
                         with open('consulta_fipe.csv', 'a', encoding='utf-8') as arq:
                             arq.write(f"{i[0]};{i[1]};{i[2]};{item}\n")
-                        print(f"[ADD ITEM] - Brand ID: {i[0]} | Model ID: {i[1]} | Year: {i[2]} | Price: {item}")
+                        print(f"[ADD ITEM] - Brand ID: {i[0]} | Model ID: {i[1]} | Year: {i[2]} | Price: {item}  | TimeStamp: {dt.datetime.now()}")
 
                     except:
                         item = np.nan
                         with open('consulta_fipe.csv', 'a', encoding='utf-8') as arq:
                             arq.write(f"{i[0]};{i[1]};{i[2]};{item}\n")
-                        print(f"[FAILED ITEM] - Brand ID: {i[0]} | Model ID: {i[1]} | Year: {i[2]} | Price: {item}")
+                        print(f"[FAILED ITEM] - Brand ID: {i[0]} | Model ID: {i[1]} | Year: {i[2]} | Price: {item}  | TimeStamp: {dt.datetime.now()}")
 
 
 def add_fipe2csv():
 
-    df = pd.read_csv("consulta_olx.csv", encoding="latin-1", sep=";")
+    df = pd.read_csv("consulta_olx2.csv", encoding="latin-1", sep=";")
     df.dropna(inplace=True)
 
 
@@ -180,18 +187,23 @@ def add_fipe2csv():
 
     df['model_id'] = df['model_id'].apply(lambda x: int(x))
     df['brand_id'] = df['brand_id'].apply(lambda x: int(x))
-    df['year'] = df['year'].apply(lambda x: str(x))
+    df['year'] = df['year'].apply(lambda x: int(x))
     fipe['model_id'] = fipe['model_id'].apply(lambda x: int(x))
     fipe['brand_id'] = fipe['brand_id'].apply(lambda x: int(x))
-    fipe['year'] = fipe['year'].apply(lambda x: str(x))
+    fipe['year'] = fipe['year'].apply(lambda x: int(x))
 
     lista = []
     for i, row in df.iterrows():
+        item = ''
 
         filt = (fipe['brand_id'] == row.brand_id) & (fipe['model_id'] == row.model_id) & (fipe['year'] == row.year)
 
         for _, p in fipe.loc[filt].iterrows():
             item = p.price
+            if item != 'missing':
+                item = item.replace('R$ ', '')
+                item = locale.atof(item)
+
 
         lista.append(item)
 
@@ -200,5 +212,5 @@ def add_fipe2csv():
     df['fipe'] = lista
     df.replace('missing', np.nan, inplace=True)
     df.dropna(inplace=True)
-    df.to_csv("consulta_olx.csv", encoding='utf-8', sep=';', index=False)
+    df.to_csv("consulta_olx2.csv", encoding='utf-8', sep=';', index=False)
 
