@@ -7,6 +7,12 @@ import locale
 import fake_useragent
 import concurrent.futures
 import datetime as dt
+import threading
+from tkinter import *
+from tkinter import Button
+#from tkinter import ttk
+from tkinter.ttk import Progressbar
+import time
 
 
 
@@ -20,7 +26,9 @@ headers = {
         'User-Agent': fake_useragent.UserAgent().chrome,
 }
 
-def get_brand_and_model():
+def get_brand():
+
+
     url = f'https://www.olx.com.br/autos-e-pecas/carros-vans-e-utilitarios'
 
     page = requests.get(url, headers=headers)
@@ -30,13 +38,20 @@ def get_brand_and_model():
     # Parse data that are stored between <select>..</select> of HTML
     select_elements = doc.xpath("//select")
 
-    brands = [i.text.replace(' - ', '-').replace(' ', '-').lower() for i in select_elements[0]]
+    brands = [i.text.replace(' - ', '-').replace(' ', '-').upper() for i in select_elements[0]]
 
-    def get_model(brand):
+    return brands
 
-        if brand == 'marca':
-            brand = ''
 
+
+
+def get_model(brand):
+
+    if brand == 'marca':
+        models = ['modelo']
+        return models
+
+    else:
         url = f'https://www.olx.com.br/autos-e-pecas/carros-vans-e-utilitarios/{brand}'
         page = requests.get(url, headers=headers)
 
@@ -45,12 +60,9 @@ def get_brand_and_model():
         # Parse data that are stored between <select>..</select> of HTML
         select_elements = doc.xpath("//select")
 
-        model = [i.text.replace(' - ', '-').replace(' ', '-').lower() for i in select_elements[1]]
-        print(f'[{brand} - ok]')
-        return model
+        models = [i.text.replace(' - ', '-').replace(' ', '-').upper() for i in select_elements[1]]
 
-
-    return { brand : get_model(brand)[1:] for i, brand in enumerate(brands) if i > 0}
+        return models
 
 
 def search_links(marca=None, modelo=None, estado=None):
@@ -61,8 +73,9 @@ def search_links(marca=None, modelo=None, estado=None):
     if marca:
         url_marca = f'{marca}/'
     if estado:
-        url_estado = f'{estado}.'
-        estados = [estado]
+            url_estado = f'{estado}.'
+            estados = [estado]
+
 
 
     def scrap(state):
@@ -100,9 +113,14 @@ def search_links(marca=None, modelo=None, estado=None):
         doc = lh.fromstring(page.content)
 
         select_elements = doc.xpath('//li/a/@href')
+        select_date = doc.xpath('//li/a/div/div[2]/div[1]/div[2]/div[4]/div/span[1]')
+        select_time = doc.xpath('//li/a/div/div[2]/div[1]/div[2]/div[4]/div/span[2]')
+
+
         with open('links.csv', 'a') as f:
-            for i in select_elements[3:]:
-                f.write(f"{i}\n")
+            for ind, i in enumerate(select_elements[3:]):
+                f.write(f"{i},{select_date[ind].text},{select_time[ind].text}\n")
+
 
         print(f"{dt.datetime.now()} | PAGE: {page_index} | ADDED: {len(select_elements[3:])} links ")
 
@@ -111,12 +129,16 @@ def search_links(marca=None, modelo=None, estado=None):
         scrap(url_state)
 
 
-def search_ads():
+def search_ads(frame=False):
+    global ad_list
+    global links_len
+    ad_list = 0
 
-    ad_list = []
 
     links = pd.read_csv('links.csv')
+    links_len = links.shape[0]
     links = (i for i in list(links['links']))
+
 
     df2 = pd.read_csv("modelos.csv")
     df2['id'] = df2['id'].apply(lambda x: x.lower())
@@ -129,6 +151,9 @@ def search_ads():
 
 
     def scrap_ad(link):
+
+        global ad_list
+
         url = link
 
         page = requests.get(url, headers=headers)
@@ -183,6 +208,7 @@ def search_ads():
                 ad['last_num_plate'] = item.get_text().replace('Final de placa', '')
 
 
+
         ad['link'] = url
         ad['postal_code'] = soup.select('.kaNiaQ')[0].get_text()
 
@@ -190,7 +216,6 @@ def search_ads():
         desc = desc.replace('\n',' ')
         desc = desc.replace(';',':')
         ad['description'] = desc
-
         ad['model'] = ad['model'].replace(ad['brand'], '').lstrip().lower()
 
         # MODEL - FIPE ID
@@ -214,14 +239,71 @@ def search_ads():
         else:
             ad['brand_id'] = np.nan
 
+        labels = set(['postal_code', 'link','description', 'brand', 'model', 'category', 'year', 'km', 'eng', 'fuel', 'transmission', 'steering', 'color', 'doors', 'last_num_plate', 'preco', 'brand_id', 'model_id'])
+        missing = labels - set(ad.keys())
+        if missing:
+            for i in missing:
+                ad[i] = "nao-preenchido"
         with open("consulta_olx.csv", 'a', encoding='utf-8') as arq:
             arq.write(f"{ad['model']};{ad['brand']};{ad['color']};{ad['transmission']};{ad['year']};{ad['km']};{ad['preco']};{ad['link']};{ad['postal_code']};{ad['description']};{ad['brand_id']};{ad['model_id']}\n")
-        ad_list.append(ad)
-        print(f"[{dt.datetime.now()}] ITEM: {len(ad_list)}  | MARCA: {ad['brand']} | MODELO:{ad['model']} | ANO: {ad['year']} | PREÇO: {ad['preco']} | KM: {ad['km']}")
+        ad_list += 1
+        print(f"[{dt.datetime.now()}] ITEM: {ad_list}  | MARCA: {ad['brand']} | MODELO:{ad['model']} | ANO: {ad['year']} | PREÇO: {ad['preco']} | KM: {ad['km']}")
+
+    """with concurrent.futures.ThreadPoolExecutor() as executor:
+        executor.map(scrap_ad, links)"""
+
+    # creating tkinter window
+
+    if frame:
+        # Progress bar widget
+        progress = Progressbar(frame, orient=HORIZONTAL,
+                               length=300, mode='determinate')
+
+        def progressbar():
 
 
-    with concurrent.futures.ThreadPoolExecutor() as executor:
-        executor.map(scrap_ad, links)
+            def bar():
+                global ad_list
+
+
+
+                while ad_list < links_len - 1:
+                    time.sleep(2)
+                    progress['value'] = ((ad_list / links_len) * 100)
+                    frame.update_idletasks()
+                else:
+                    print(f"Scraping Ended - Total {ad_list} ads")
+                    progress.destroy()
+
+
+            def thread_scraper():
+
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    executor.map(scrap_ad, links)
+
+
+            func1 = threading.Thread(target=bar)
+            func2 = threading.Thread(target=thread_scraper)
+
+            func1.start()
+            func2.start()
+
+        progress.grid(row=6, column=0)
+
+        # This button will initialize
+        # the progress bar
+        Button(frame, text='Start', command=progressbar).grid(row=7, column=0)
+
+        # infinite loop
+        mainloop()
+
+    else:
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            executor.map(scrap_ad, links)
+
+
+
+
 
 def get_links(brand, model, state):
 
@@ -230,14 +312,22 @@ def get_links(brand, model, state):
                'ro', 'rr', 'sc', 'sp', 'se', 'to']
 
     with open('links.csv', 'w') as f:
-        f.write("links\n")
+        f.write("links,data,horario\n")
 
     if state:
-        search_links(brand, model, state)
+        if state.lower() == 'todos':
+            for uf in estados:
+                search_links(brand, model, uf)
+        else:
+            search_links(brand, model, state)
     else:
         for uf in estados:
             search_links(brand, model, uf)
 
 
+
+
+if __name__ == '__main__':
+    search_ads()
 
 
