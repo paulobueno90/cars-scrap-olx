@@ -144,3 +144,6 @@ def df_adjust():
             df.dropna(inplace=True)
 
     df.to_csv('consulta_olx2.csv', encoding='utf-8', sep=';', index=False)
+
+
+

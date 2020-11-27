@@ -33,45 +33,51 @@ def get_models():
 
         except:
 
+            def _(x):
+                item = x.replace(' - ', '-')
+                item = item.replace(' ','-')
+                return item
+
             url_marcas = "http://fipeapi.appspot.com/api/1/carros/marcas.json"
             marcas = pd.read_json(url_marcas)
-            marcas.to_csv('marcas.csv', index=False)
+            marcas['fipe_name'] = marcas['fipe_name'].apply(lambda x: _(x))
+            #marcas.to_csv('marcas.csv', index=False)
 
         with open('modelos.csv', 'w', encoding='utf-8') as f:
-            f.write("fipe_marca,name,marca,key,id,fipe_name\n")
+            f.write("fipe_marca;name;marca;key;id;brand_id\n")
 
         for index, row in marcas.iterrows():
-
 
             sleep(1)
             url_modelos = f"http://fipeapi.appspot.com/api/1/carros/veiculos/{row.id}.json"
             modelos = pd.read_json(url_modelos)
             for i, r in modelos.iterrows():
                 with open('modelos.csv', 'a', encoding='utf-8') as f:
-                    f.write(f"{row.fipe_name},{r.name},{r.key},{r.id},{r.fipe_name}\n")
+                    brand = row.fipe_name
+                    brand = brand.lower()
+                    brand = brand.replace('ë', 'e')
+                    vers = str(r.fipe_name)
+                    vers = vers.lower()
+                    f.write(f"{brand};{r.name};{r.key};{r.id};{vers};{row.id}\n")
 
 
-            print(f"[id: {row.id} | {row.fipe_name}] - Ok !")
+            print(f"[id: {row.id} | {brand.title()}] - Ok !")
+
+    df = pd.read_csv('modelos.csv', sep=';')
+    df['id'] = df['id'].apply(lambda x: x.lower())
+    df.to_csv('modelos.csv', index=False, sep=';')
 
 
 
 def get_fipe_price(marca, modelo, ano):
 
-
-
     url_md = f"http://fipeapi.appspot.com/api/1/carros/veiculo/{marca}/{modelo}.json"
-
-
-
 
     year = pd.read_json(url_md)
     year['ano'] = year['key'].apply(lambda x: int(x[0:4]))
 
-
-
     filt = year['ano'] == ano
     year = year.loc[filt]
-
 
     if year.empty:
 
@@ -213,4 +219,27 @@ def add_fipe2csv():
     df.replace('missing', np.nan, inplace=True)
     df.dropna(inplace=True)
     df.to_csv("consulta_olx2.csv", encoding='utf-8', sep=';', index=False)
+
+def fipe_id_brand_model():
+    df = pd.read_csv("consulta_olx.csv", sep=';')
+    df2 = pd.read_csv("modelos.csv", sep=';')
+
+    versoes_id = {}
+    for i, row in df2.iterrows():
+        versoes_id[row.id] = row.key
+        versoes_id[row.fipe_marca] = row.brand_id
+
+    def model_id(x):
+        for key in versoes_id.keys():
+            if x in key:
+                return versoes_id[key]
+        return np.nan
+
+
+    df['model_id'] = df['model'].apply(lambda x: int(model_id(x)))
+    df['brand_id'] = df['brand'].apply(lambda x: versoes_id[x])
+    #df.dropna(inplace=True)
+    df.to_csv('consulta_olx.csv', sep=';')
+
+
 

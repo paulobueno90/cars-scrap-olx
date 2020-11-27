@@ -14,6 +14,8 @@ from tkinter import Button
 from tkinter.ttk import Progressbar
 import time
 
+from fipe import fipe_id_brand_model
+
 
 
 locale.setlocale(locale.LC_NUMERIC, '')
@@ -67,7 +69,6 @@ def get_model(brand):
 
 def search_links(marca=None, modelo=None, estado=None):
 
-
     url_estado = estado
     url_marca = marca
     if marca:
@@ -75,8 +76,6 @@ def search_links(marca=None, modelo=None, estado=None):
     if estado:
             url_estado = f'{estado}.'
             estados = [estado]
-
-
 
     def scrap(state):
         url = f"https://{state}olx.com.br/autos-e-pecas/carros-vans-e-utilitarios/{url_marca}{modelo}?o=1"
@@ -129,7 +128,7 @@ def search_links(marca=None, modelo=None, estado=None):
         scrap(url_state)
 
 
-def search_ads(frame=False):
+def search_ads(frame=False, modelo=None):
     global ad_list
     global links_len
     ad_list = 0
@@ -139,15 +138,8 @@ def search_ads(frame=False):
     links_len = links.shape[0]
     links = (i for i in list(links['links']))
 
-
-    df2 = pd.read_csv("modelos.csv")
-    df2['id'] = df2['id'].apply(lambda x: x.lower())
-
-    df3 = pd.read_csv("marcas.csv")
-
-
     with open("consulta_olx.csv", 'w', encoding='utf-8') as arq:
-        arq.write(f"model;brand;color;transmission;year;km;preco;link;postal_code;description;brand_id;model_id\n")
+        arq.write(f"model;brand;color;transmission;year;km;preco;link;postal_code;description\n")
 
 
     def scrap_ad(link):
@@ -164,8 +156,6 @@ def search_ads(frame=False):
 
         ad = {}
 
-
-
         for item in soup.select('.cIfjkh'):
             ad['preco'] = item.get_text().lstrip('R$ ').replace('.', '')
 
@@ -173,6 +163,7 @@ def search_ads(frame=False):
 
             if 'Modelo' in item.get_text():
                 ad['model'] = item.get_text().replace('Modelo', '')
+                ad['model'] = ad['model'].replace(']','')
 
             elif 'Marca' in item.get_text():
                 ad['brand'] = item.get_text().replace('Marca', '')
@@ -208,7 +199,6 @@ def search_ads(frame=False):
                 ad['last_num_plate'] = item.get_text().replace('Final de placa', '')
 
 
-
         ad['link'] = url
         ad['postal_code'] = soup.select('.kaNiaQ')[0].get_text()
 
@@ -217,63 +207,75 @@ def search_ads(frame=False):
         desc = desc.replace(';',':')
         ad['description'] = desc
         ad['model'] = ad['model'].replace(ad['brand'], '').lstrip().lower()
+        ad['model'] = ad['model'].replace(modelo, '').lstrip()
+        ad['base_model'] = modelo
+        ad['brand'] = ad['brand'].lower()
 
-        # MODEL - FIPE ID
-        filt = df2['id'] == ad['model']
-        items = df2.loc[filt]
-        item = items['key'].to_list()
-        if item:
-            ad['model_id'] = item[0]
-
+        """if ad['base_model'] in ad['model']:
+            pass
         else:
-            ad['model_id'] = np.nan
+            ad['model'] = f"{modelo} {ad['model']}"""
 
-        # BRAND - FIPE ID
-        filt = df3['name'] == ad['brand']
-        items = df3.loc[filt]
-        item = items['id'].to_list()
-
-        if item:
-            ad['brand_id'] = item[0]
-
-        else:
-            ad['brand_id'] = np.nan
-
-        labels = set(['postal_code', 'link','description', 'brand', 'model', 'category', 'year', 'km', 'eng', 'fuel', 'transmission', 'steering', 'color', 'doors', 'last_num_plate', 'preco', 'brand_id', 'model_id'])
+        labels = {'postal_code', 'link', 'description', 'brand', 'model', 'category', 'year', 'km', 'eng', 'fuel',
+                  'transmission', 'steering', 'color', 'doors', 'last_num_plate', 'preco', 'base_model'}
         missing = labels - set(ad.keys())
+
         if missing:
             for i in missing:
                 ad[i] = "nao-preenchido"
-        with open("consulta_olx.csv", 'a', encoding='utf-8') as arq:
-            arq.write(f"{ad['model']};{ad['brand']};{ad['color']};{ad['transmission']};{ad['year']};{ad['km']};{ad['preco']};{ad['link']};{ad['postal_code']};{ad['description']};{ad['brand_id']};{ad['model_id']}\n")
-        ad_list += 1
-        print(f"[{dt.datetime.now()}] ITEM: {ad_list}  | MARCA: {ad['brand']} | MODELO:{ad['model']} | ANO: {ad['year']} | PREÇO: {ad['preco']} | KM: {ad['km']}")
 
-    """with concurrent.futures.ThreadPoolExecutor() as executor:
-        executor.map(scrap_ad, links)"""
+        with open("consulta_olx.csv", 'a', encoding='utf-8') as arq:
+            arq.write(f"{ad['model']};{ad['brand']};{ad['color']};{ad['transmission']};{ad['year']};{ad['km']};{ad['preco']};{ad['link']};{ad['postal_code']};{ad['description']}\n")
+        ad_list += 1
+        print(f"[{dt.datetime.now()}] ITEM: {ad_list}  | MARCA: {ad['brand']} | MODELO: {ad['base_model']} | VERSÃO: {ad['model']} | ANO: {ad['year']} | PREÇO: {ad['preco']} | KM: {ad['km']}")
+
 
     # creating tkinter window
 
     if frame:
         # Progress bar widget
-        progress = Progressbar(frame, orient=HORIZONTAL,
+
+        download = Toplevel(frame, pady=30)
+        download.title("Download Anuncios")
+        download.iconbitmap("./gear2.ico")
+
+
+        progress = Progressbar(download, orient=HORIZONTAL,
                                length=300, mode='determinate')
 
-        def progressbar():
+        perc = Label(download, text=f"Aguardando Inicio")
+        quant = Label(download, text=f"")
 
+        def progressbar():
 
             def bar():
                 global ad_list
 
+                last2 = None
+                last1 = None
 
 
                 while ad_list < links_len - 1:
+
+                    last2 = last1
+                    last1 = ad_list
+
+                    if ad_list == last2:
+                        break
+
                     time.sleep(2)
-                    progress['value'] = ((ad_list / links_len) * 100)
-                    frame.update_idletasks()
+                    perc_complete = round(((ad_list / links_len) * 100), 2)
+                    progress['value'] = perc_complete
+                    perc['text'] = f"{perc_complete}%"
+                    quant['text'] = f"Download: {ad_list} itens de um total de {links_len} itens."
+                    download.update_idletasks()
                 else:
                     print(f"Scraping Ended - Total {ad_list} ads")
-                    progress.destroy()
+                    quant.destroy()
+                    perc['text'] = f"Procedimento Completo."
+                    download.update_idletasks()
+                    time.sleep(3)
+                    download.destroy()
 
 
             def thread_scraper():
@@ -281,6 +283,7 @@ def search_ads(frame=False):
                 with concurrent.futures.ThreadPoolExecutor() as executor:
                     executor.map(scrap_ad, links)
 
+            time.sleep(2)
 
             func1 = threading.Thread(target=bar)
             func2 = threading.Thread(target=thread_scraper)
@@ -288,24 +291,26 @@ def search_ads(frame=False):
             func1.start()
             func2.start()
 
-        progress.grid(row=6, column=0)
 
         # This button will initialize
         # the progress bar
-        Button(frame, text='Start', command=progressbar).grid(row=7, column=0)
+        #btn_str = Button(download, text='Start', command=progressbar)
 
-        # infinite loop
-        mainloop()
+        quant.grid(row=0, column=0)
+        progress.grid(row=1, column=0)
+        perc.grid(row=2, column=0)
+        #btn_str.grid(row=3, column=0)
+        progressbar()
 
     else:
         with concurrent.futures.ThreadPoolExecutor() as executor:
             executor.map(scrap_ad, links)
 
 
+    fipe_id_brand_model()
 
 
-
-def get_links(brand, model, state):
+def get_links(brand, model, state, frame=None):
 
     estados = ['ac', 'al', 'ap', 'am', 'ba', 'ce', 'df', 'es', 'go', 'ma', 'mt',
                'ms', 'mg', 'pa', 'pb', 'pr', 'pe', 'pi', 'rj', 'rn', 'rs',
@@ -314,20 +319,28 @@ def get_links(brand, model, state):
     with open('links.csv', 'w') as f:
         f.write("links,data,horario\n")
 
+
+    estados_qt = len(estados)
+
+
+
+    est = Label(frame, text=f"Estado: N/A")
+    tot_est = Label(frame, text=f"Total: 0 / {estados_qt} estados")
+
+    est.grid(row=0, column=0)
+    tot_est.grid(row=1, column=0)
+
+
+
     if state:
         if state.lower() == 'todos':
-            for uf in estados:
+            for i,uf in enumerate(estados):
+                est['text'] = f"Estado: {uf.upper()}"
+                tot_est['text'] = f"Total: {i + 1} / {estados_qt} estados"
+                frame.update_idletasks()
                 search_links(brand, model, uf)
+            est.destroy()
+            tot_est.destroy()
         else:
             search_links(brand, model, state)
-    else:
-        for uf in estados:
-            search_links(brand, model, uf)
-
-
-
-
-if __name__ == '__main__':
-    search_ads()
-
 
