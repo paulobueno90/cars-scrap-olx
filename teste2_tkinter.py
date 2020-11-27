@@ -2,6 +2,7 @@ from tkinter import *
 from tkinter import Button
 from tkinter import ttk
 from spider import *
+from data_view import *
 
 estados = ['TODOS', 'AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MT', 'MS', 'MG', 'PA', 'PB', 'PR', 'PE', 'PI', 'RJ', 'RN', 'RS', 'RO', 'RR', 'SC', 'SP', 'SE', 'TO']
 estados = {i:i.lower() for i in estados}
@@ -38,17 +39,17 @@ def frame_pesquisa_simples():
         model = car_model.get().lower()
         estate = uf.get().lower()
 
-        get_links(brand, model, estate)
-        search_ads(frame_pesq_simples)
+        get_links(brand, model, estate,frame_pesq_simples)
+        search_ads(frame_pesq_simples, modelo=model)
 
     btn_pesquisar = Button(frame_pesq_simples, text="Pesquisar", command=search_btn, height=2, width=15)
     btn_frame_cont_sair = Button(frame_pesq_simples, text="Fechar", command=unpack_frame, height = 2, width = 15)
 
-    uf.grid(row=0, column=0)
-    car_brand.grid(row=1, column=0)
-    car_model.grid(row=2, column=0)
-    btn_pesquisar.grid(row=3, column=0)
-    btn_frame_cont_sair.grid(row=4, column=0)
+    uf.grid(row=2, column=0)
+    car_brand.grid(row=3, column=0)
+    car_model.grid(row=4, column=0)
+    btn_pesquisar.grid(row=5, column=0)
+    btn_frame_cont_sair.grid(row=6, column=0)
 
     tab_control.add(frame_pesq_simples, text="Pesquisa")
 
@@ -56,14 +57,29 @@ def frame_atualizar_pesquisa():
     def unpack_frame():
         frame_att_pesquisa.destroy()
 
-    frame_att_pesquisa = LabelFrame(tab_control, text="Atualizar", padx=200, pady=200)
+
+
+    frame_att_pesquisa = LabelFrame(tab_control, text="Visualizar", padx=20)
     frame_att_pesquisa.grid(row=2, column=0)
+    window_data(frame_att_pesquisa)
 
-
+    label1 = Label(frame_att_pesquisa, text=f"Mostrar Anuncios:", anchor='w')
+    check_normal = Checkbutton(frame_att_pesquisa, text="Anuncios Normais")
+    check_agio = Checkbutton(frame_att_pesquisa, text="Ágio")
+    check_carta = Checkbutton(frame_att_pesquisa, text="Consórcio")
+    check_realidade = Checkbutton(frame_att_pesquisa, text="Informação Duvidosa")
     btn_frame_cont_sair = Button(frame_att_pesquisa, text="Sair", command=unpack_frame, height = 2, width = 15)
+
+    label1.config(font=("Courier", 22))
+
+    label1.grid(row=0, column=0)
+    check_normal.grid(row=1, column=0)
+    check_agio.grid(row=1, column=2)
+    check_carta.grid(row=1, column=3)
+    check_realidade.grid(row=1, column=4)
     btn_frame_cont_sair.grid(row=2, column=0)
 
-    tab_control.add(frame_att_pesquisa, text="Update")
+    tab_control.add(frame_att_pesquisa, text="Visualizar")
 
 def frame_pesquisa_completa():
     def unpack_frame():
@@ -96,7 +112,8 @@ def frame_precificador():
 
 
 root = Tk()
-root.title('Learn To Code at Codemy.com')
+root.title('Scraper Olx - 2020')
+root.iconphoto(False, PhotoImage(file='./olx.png'))
 root.geometry("675x500")
 #root.minsize(675, 500)
 
