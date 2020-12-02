@@ -239,7 +239,7 @@ def fipe_id_brand_model():
     df['model_id'] = df['model'].apply(lambda x: int(model_id(x)))
     df['brand_id'] = df['brand'].apply(lambda x: versoes_id[x])
     #df.dropna(inplace=True)
-    df.to_csv('consulta_olx.csv', sep=';')
+    df.to_csv('consulta_olx.csv', sep=';', index=False)
 
 
 
