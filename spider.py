@@ -13,7 +13,7 @@ from tkinter import Button
 #from tkinter import ttk
 from tkinter.ttk import Progressbar
 import time
-
+import datetime
 from fipe import fipe_id_brand_model
 
 
@@ -43,8 +43,6 @@ def get_brand():
     brands = [i.text.replace(' - ', '-').replace(' ', '-').upper() for i in select_elements[0]]
 
     return brands
-
-
 
 
 def get_model(brand):
@@ -115,10 +113,44 @@ def search_links(marca=None, modelo=None, estado=None):
         select_date = doc.xpath('//li/a/div/div[2]/div[1]/div[2]/div[4]/div/span[1]')
         select_time = doc.xpath('//li/a/div/div[2]/div[1]/div[2]/div[4]/div/span[2]')
 
+        monthvalue_dict = {
+            "jan":"01",
+            "fev":"02",
+            "mar":"03",
+            "abr":"04",
+            "mai":"05",
+            "jun":"06",
+            "jul":"07",
+            "ago":"08",
+            "set":"09",
+            "out":"10",
+            "nov":"11",
+            "dez":"12"
+        }
+
+        delta_0day = datetime.datetime.today().date()
+        delta_1day = delta_0day - datetime.timedelta(days=1)
+        year_now = datetime.datetime.today().year
 
         with open('links.csv', 'a') as f:
             for ind, i in enumerate(select_elements[3:]):
-                f.write(f"{i},{select_date[ind].text},{select_time[ind].text}\n")
+                ad_date = select_date[ind].text
+                ad_date = ad_date.lower()
+
+                if ad_date == "hoje":
+                    ad_date = delta_0day
+
+                elif ad_date == "ontem":
+                    ad_date = delta_1day
+
+                else:
+                    ad_date = ad_date.split()
+                    ad_date = f"{year_now}-{monthvalue_dict[ad_date[1]]}-{ad_date[0]}"
+
+                ad_date = f"{ad_date} {select_time[ind].text}"
+                ad_date = datetime.datetime.strptime(ad_date, '%Y-%m-%d %H:%M')
+
+                f.write(f"{i} & {ad_date}\n")
 
 
         print(f"{dt.datetime.now()} | PAGE: {page_index} | ADDED: {len(select_elements[3:])} links ")
@@ -138,15 +170,17 @@ def search_ads(frame=False, modelo=None):
     links_len = links.shape[0]
     links = (i for i in list(links['links']))
 
+
     with open("consulta_olx.csv", 'w', encoding='utf-8') as arq:
-        arq.write(f"model;brand;color;transmission;year;km;preco;link;postal_code;description\n")
+        arq.write(f"data;base_model;model;brand;color;transmission;year;km;preco;link;postal_code;description\n")
 
 
-    def scrap_ad(link):
+    def scrap_ad(link, data=None):
 
         global ad_list
 
-        url = link
+        entry = link.split(" & ")
+        url, data = entry[0], entry[1]
 
         page = requests.get(url, headers=headers)
 
@@ -203,7 +237,7 @@ def search_ads(frame=False, modelo=None):
         ad['postal_code'] = soup.select('.kaNiaQ')[0].get_text()
 
         desc = soup.select('.eOSweo')[0].get_text()
-        desc = desc.replace('\n',' ')
+        desc = desc.replace('\n','$ENTER$')
         desc = desc.replace(';',':')
         ad['description'] = desc
         ad['model'] = ad['model'].replace(ad['brand'], '').lstrip().lower()
@@ -220,13 +254,18 @@ def search_ads(frame=False, modelo=None):
                   'transmission', 'steering', 'color', 'doors', 'last_num_plate', 'preco', 'base_model'}
         missing = labels - set(ad.keys())
 
+        if ad['model'] == '':
+            ad['model'] = "nao-preenchido"
+
         if missing:
             for i in missing:
                 ad[i] = "nao-preenchido"
 
         with open("consulta_olx.csv", 'a', encoding='utf-8') as arq:
-            arq.write(f"{ad['model']};{ad['brand']};{ad['color']};{ad['transmission']};{ad['year']};{ad['km']};{ad['preco']};{ad['link']};{ad['postal_code']};{ad['description']}\n")
+            arq.write(
+                f"{data};{ad['base_model']};{ad['model']};{ad['brand']};{ad['color']};{ad['transmission']};{ad['year']};{ad['km']};{ad['preco']};{ad['link']};{ad['postal_code']};{ad['description']}\n")
         ad_list += 1
+
         print(f"[{dt.datetime.now()}] ITEM: {ad_list}  | MARCA: {ad['brand']} | MODELO: {ad['base_model']} | VERSÃO: {ad['model']} | ANO: {ad['year']} | PREÇO: {ad['preco']} | KM: {ad['km']}")
 
 
@@ -317,7 +356,7 @@ def get_links(brand, model, state, frame=None):
                'ro', 'rr', 'sc', 'sp', 'se', 'to']
 
     with open('links.csv', 'w') as f:
-        f.write("links,data,horario\n")
+        f.write("links\n")
 
 
     estados_qt = len(estados)
@@ -343,4 +382,14 @@ def get_links(brand, model, state, frame=None):
             tot_est.destroy()
         else:
             search_links(brand, model, state)
+
+
+def ad_images(link):
+    url = link
+    page = requests.get(url, headers=headers)
+
+    soup = BeautifulSoup(page.content, 'html.parser')
+
+    return [item.img.get('src') for item in soup.select('.bQbWAr')]
+
 
